@@ -13,6 +13,8 @@ from sklearn import metrics
 from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau, CosineAnnealingLR
 from warmup_scheduler import GradualWarmupScheduler
 
+import sys
+sys.path.append("utils")
 from meters import AverageMeter
 
 class GradualWarmupSchedulerV2(GradualWarmupScheduler):
@@ -142,17 +144,17 @@ class PyTorchTrainer:
                         f'time: {(time.time() - t):.5f}', end='\r'
                     )
             with torch.no_grad():
-                targets = targets.to(self.device).float()
+                targets = targets.to(self.device).long()
                 batch_size = images.shape[0]
                 images = images.to(self.device).float()
                 outputs = self.model(images)
                 loss = self.criterion(outputs, targets)
 
                 summary_loss.update(loss.detach().item(), batch_size)
-                summary_acc.update((outputs.argmax(1)==targets).sum().item()/batch_size,batch_size))
-                summary_f1.update(metrics.f1_score(targets.detach().cput().numpy(), outputs.argmax(1).detach().cput().numpy()), batch_size)
+                summary_acc.update((outputs.argmax(1)==targets).sum().item()/batch_size, batch_size)
+                summary_f1.update(metrics.f1_score(targets.detach().cpu().numpy(), outputs.argmax(1).detach().cpu().numpy(), average="macro"), batch_size)
                 example_images.append(wandb.Image(
-                    images[0], caption=f"Pred: {outputs[0].detach().cpu().item()} Truth: {targets[0].detach().cpu().item()}"
+                    images[0], caption=f"Pred: {outputs.argmax(1)[0].detach().cpu().item()} Truth: {targets[0].detach().cpu().item()}"
                 ))
 
         return summary_loss, (summary_acc, summary_f1), example_images
@@ -160,6 +162,8 @@ class PyTorchTrainer:
     def train_one_epoch(self, train_loader):
         self.model.train()
         summary_loss = AverageMeter()
+        summary_acc = AverageMeter()
+        summary_f1 = AverageMeter()
         t = time.time()
         for step, (images, targets) in enumerate(train_loader):
             if self.config.verbose:
@@ -169,7 +173,7 @@ class PyTorchTrainer:
                         f'summary_loss: {summary_loss.avg:.5f}, ' + \
                         f'time: {(time.time() - t):.5f}', end='\r'
                     )
-            targets = targets.to(self.device).float()
+            targets = targets.to(self.device).long()
             images = images.to(self.device).float()
             batch_size = images.shape[0]
 
@@ -179,8 +183,8 @@ class PyTorchTrainer:
             loss.backward()
             
             summary_loss.update(loss.detach().item(), batch_size)
-            summary_acc.update((outputs.argmax(1)==targets).sum().item()/batch_size,batch_size))
-            summary_f1.update(metrics.f1_score(targets.detach().cput().numpy(), outputs.argmax(1).detach().cput().numpy()), batch_size)
+            summary_acc.update((outputs.argmax(1)==targets).sum().item()/batch_size,batch_size)
+            summary_f1.update(metrics.f1_score(targets.detach().cpu().numpy(), outputs.argmax(1).detach().cpu().numpy(), average="macro"), batch_size)
 
             self.optimizer.step()
 

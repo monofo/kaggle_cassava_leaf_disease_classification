@@ -13,11 +13,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import wandb
+from torch.utils.data import DataLoader
 
 
 from dataset import KaggleDataset
 from utils.trainer import PyTorchTrainer
-from models.model_factory import timmNet
+from models.model_factory import MODEL_LIST
 
 sys.path.append("configs")
 
@@ -36,28 +37,29 @@ device = torch.device('cuda:0')
 
 def main(args):
 
-    wandb.init(project=)
+    wandb.init(project="kaggle_cassava_leaf_disease_classification")
     config = importlib.import_module(f"{args.config}")
     os.makedirs(f"./result/{args.config}", exist_ok=True)
     df = pd.read_csv("./data/train.csv")
     df["kfold"] = -1
+    df = df.sample(frac=1).reset_index(drop=True)
     y = df["label"].values
     skf = StratifiedKFold(n_splits=5)
     for (fold_num), (train_index, val_index) in enumerate(skf.split(X=df, y=y)):
-        df.loc[df[val_index, "kfold"]] = fold_num
+        df.loc[df.iloc[val_index].index, "kfold"] = fold_num
 
 
     train_dataset = KaggleDataset(
         data_dir="train_images",
         df=df.loc[df["kfold"] != config.fold_num],
-        transform=config.train_transforms,
+        transforms=config.train_transforms,
         mode="train"
     )
 
     validation_dataset = KaggleDataset(
         data_dir="train_images",
         df=df.loc[df["kfold"] == config.fold_num],
-        transform=config.valid_transforms,
+        transforms=config.valid_transforms,
         mode="val"
     )
 
@@ -75,8 +77,9 @@ def main(args):
         num_workers=4,
     )
 
-    
-    net = timmNet(net_type=config.net_type, pretrained=True).cuda()
+    if config.net_type.startswith("efficientnet"):
+        net = MODEL_LIST["effcientnet"](net_type=config.net_type, pretrained=True).cuda()
+        
     wandb.watch(net, log="all")
 
     runner = PyTorchTrainer(model=net, device=device, config=config)
