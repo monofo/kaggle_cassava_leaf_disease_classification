@@ -18,9 +18,9 @@ fmix_ratio = 0.0
 
 num_workers = 4
 batch_size = 32
-n_epochs = 20
+n_epochs = 15
 lr = 1e-4
-img_size = 512
+img_size = 256
 criterion = torch.nn.CrossEntropyLoss()
 
 train_transforms = A.Compose([

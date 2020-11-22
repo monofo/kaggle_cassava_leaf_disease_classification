@@ -48,3 +48,7 @@ def fmix(data, targets, alpha, decay_power, shape, max_soft=0.0, reformulate=Fal
     targets=(targets, shuffled_targets, lam)
     
     return (x1+x2), targets
+
+def mix_criterion(preds, targets, criterion):
+    targets1, targets2, lam = targets[0], targets[1], targets[2]
+    return lam * criterion(preds, targets1) + (1 - lam) * criterion( preds, targets2)

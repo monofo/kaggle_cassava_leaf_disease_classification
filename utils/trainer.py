@@ -16,7 +16,7 @@ from warmup_scheduler import GradualWarmupScheduler
 import sys
 sys.path.append("utils")
 from meters import AverageMeter
-from mixs import cutmix, fmix
+from mixs import cutmix, fmix, mix_criterion
 
 class GradualWarmupSchedulerV2(GradualWarmupScheduler):
     def __init__(self, optimizer, multiplier, total_epoch, after_scheduler=None):
@@ -61,7 +61,7 @@ class PyTorchTrainer:
         self.config = config
         self.epoch = 0
         
-        self.base_dir = f'./result/{config.dir}/{config.fold_num}'
+        self.base_dir = f'./result/{config.dir}/fold_{config.fold_num}'
         os.makedirs(self.base_dir, exist_ok=True)
         self.log_path = f'{self.base_dir}/log.txt'
         self.best_summary_loss = 10**5
@@ -174,7 +174,7 @@ class PyTorchTrainer:
         t = time.time()
         for step, (images, targets) in enumerate(train_loader):
             choice = np.random.rand(1)
-
+            self.optimizer.zero_grad()
             if self.config.verbose:
                 if step % self.config.verbose_step == 0:
                     print(
@@ -187,13 +187,19 @@ class PyTorchTrainer:
             batch_size = images.shape[0]
             
             if choice <= self.cutmix:
-                images, targets = cutmix(images, targets, 1.)
+                aug_images, aug_targets = cutmix(images, targets, 1.)
+                outputs = self.model(aug_images)
+                loss = mix_criterion(outputs, aug_targets, self.criterion)
             elif choice <= self.cutmix + self.fmix:
-                images, targets = fmix(images, targets, alpha=1., decay_power=3., shape=(self.config.img_size,self.config.img_size))
+                aug_images, aug_targets = fmix(images, targets, alpha=1., decay_power=3., shape=(self.config.img_size,self.config.img_size))
+                outputs = self.model(aug_images)
+                loss = mix_criterion(outputs, aug_targets, self.criterion)
+            else:
+                outputs = self.model(images)
+                loss = self.criterion(outputs, targets)
 
-            self.optimizer.zero_grad()
-            outputs = self.model(images)
-            loss = self.criterion(outputs, targets)
+            
+
             loss.backward()
             
             summary_loss.update(loss.detach().item(), batch_size)
