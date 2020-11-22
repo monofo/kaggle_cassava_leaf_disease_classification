@@ -114,6 +114,11 @@ if __name__ == "__main__":
         "-c",
         required=True,
     )
+    parser.add_argument(
+        "--gpus",
+        "-g",
+        str,
+    )
     args = parser.parse_args()
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
     main(args)
