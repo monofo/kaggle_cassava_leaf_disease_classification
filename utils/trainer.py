@@ -2,6 +2,7 @@
 from glob  import glob
 import os
 import time
+from torch._C import device
 import torch.nn as nn
 import warnings
 from datetime import datetime
@@ -191,7 +192,8 @@ class PyTorchTrainer:
                 outputs = self.model(aug_images)
                 loss = mix_criterion(outputs, aug_targets, self.criterion)
             elif choice <= self.cutmix + self.fmix:
-                aug_images, aug_targets = fmix(images, targets, alpha=1., decay_power=3., shape=(self.config.img_size,self.config.img_size))
+                aug_images, aug_targets = fmix(images, targets, alpha=1., decay_power=3., shape=(self.config.img_size,self.config.img_size), device=device)
+                aug_images = aug_images.to(self.device).float()
                 outputs = self.model(aug_images)
                 loss = mix_criterion(outputs, aug_targets, self.criterion)
             else:

@@ -17,6 +17,7 @@ from torch.utils.data import DataLoader
 
 from dataset import KaggleDataset
 from utils.trainer import PyTorchTrainer
+
 # from models.model_factory import MODEL_LIST
 import timm
 class timmEffNet(nn.Module):
@@ -35,6 +36,8 @@ MODEL_LIST ={
     # "resnet": timmNet,
     "effcientnet": timmEffNet,
 }
+
+
 sys.path.append("configs")
 
 seed = 42
@@ -49,6 +52,7 @@ def seed_everything(seed):
 
 seed_everything(seed)
 device = torch.device('cuda')
+
 
 def main(args):
     
@@ -120,5 +124,5 @@ if __name__ == "__main__":
         type=str,
     )
     args = parser.parse_args()
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     main(args)

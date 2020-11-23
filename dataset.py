@@ -28,7 +28,7 @@ class KaggleDataset(Dataset):
             augmented = self.transforms(image=image)
             image = augmented['image']
 
-        return image, torch.tensor(label, dtype=torch.long)
+        return torch.tensor(image, dtype=torch.float), torch.tensor(label, dtype=torch.long)
 
     def __len__(self):
         return self.df.shape[0]

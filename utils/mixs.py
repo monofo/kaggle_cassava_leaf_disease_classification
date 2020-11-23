@@ -38,13 +38,16 @@ def cutmix(data, target, alpha):
 
     return new_data, targets
 
-def fmix(data, targets, alpha, decay_power, shape, max_soft=0.0, reformulate=False):
+def fmix(data, targets, alpha, decay_power, shape, device, max_soft=0.0, reformulate=False):
+    data = data.detach().cpu()
     lam, mask = sample_mask(alpha, decay_power, shape, max_soft, reformulate)
     indices = torch.randperm(data.size(0))
     shuffled_data = data[indices]
     shuffled_targets = targets[indices]
     x1 = torch.from_numpy(mask)*data
     x2 = torch.from_numpy(1-mask)*shuffled_data
+    # x1 = x1.to(device)
+    # x2 = x2.to(device)
     targets=(targets, shuffled_targets, lam)
     
     return (x1+x2), targets
