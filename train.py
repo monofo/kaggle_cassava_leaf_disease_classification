@@ -109,30 +109,27 @@ def main(args):
         df = pd.read_csv("./data/split_df.csv")
         # # df = df_[~df_.image_id.isin(invalid_ids)].copy()
 
-        # # df_20 = df.loc[(df["source"] == 2020)].copy().reset_index(drop=True)
-        # # df_20["data_dir"] = "train_images"
-
-        # df_20 = df.loc[(df["source"] == 2020) & (df["label"] != 3)].copy().reset_index(drop=True)
+        # df_20 = df.loc[(df["source"] == 2020)].copy().reset_index(drop=True)
         # df_20["data_dir"] = "train_images"
-        # df_20_3 = df.loc[(df["source"] == 2020) & (df["label"] == 3)].copy().reset_index(drop=True)
 
-        # df_20_3 = df_20_3.sample(frac=0.7)
-        # df_20_3["data_dir"] = "train_images"
+        df_20 = df.loc[(df["source"] == 2020)].copy().reset_index(drop=True)
+        df_20["data_dir"] = "train_images"
 
+        df_19_0 = df.loc[(df["source"] == 2019) & (df["label"] == 0)].copy().reset_index(drop=True)
+        df_19_0["data_dir"] = "train/cbb/"
 
-        # df_19_0 = df.loc[(df["source"] == 2019) & (df["label"] == 0)].copy().reset_index(drop=True)
-        # df_19_0["data_dir"] = "train/cbb/"
+        df_19_2 = df.loc[(df["source"] == 2019) & (df["label"] == 2)].copy().reset_index(drop=True)
+        df_19_2["data_dir"] = "train/cgm/"
 
-        # df_19_2 = df.loc[(df["source"] == 2019) & (df["label"] == 2)].copy().reset_index(drop=True)
-        # df_19_2["data_dir"] = "train/cgm/"
+        df_19_4 = df.loc[(df["source"] == 2019) & (df["label"] == 4)].copy().reset_index(drop=True)
+        df_19_4["data_dir"] = "train/healthy/"
 
-        # df_19_4 = df.loc[(df["source"] == 2019) & (df["label"] == 4)].copy().reset_index(drop=True)
-        # df_19_4["data_dir"] = "train/healthy/"
-
-        # df = pd.concat([df_20, df_20_3, df_19_0, df_19_2, df_19_4], axis=0).reset_index(drop=True)
-        # # df = pd.concat([df_20, df_19_0, df_19_2, df_19_4], axis=0).reset_index(drop=True)
+        df = pd.concat([df_20, df_19_0, df_19_2, df_19_4], axis=0).reset_index(drop=True)
+        # df = pd.concat([df_20, df_19_0, df_19_2, df_19_4], axis=0).reset_index(drop=True)
     else:
         df = pd.read_csv("./data/train.csv")
+
+
         # df = df_[~df_.image_id.isin(invalid_ids)].copy()
 
     df["kfold"] = -1
@@ -146,14 +143,23 @@ def main(args):
     train_df = df.loc[df["kfold"] != args.fold_num].reset_index(drop=True).copy()
     valid_df = df.loc[df["kfold"] == args.fold_num].reset_index(drop=True).copy()
 
+    sampler = None
     if config.upsampling:
-        df_0 = train_df.loc[train_df["label"] == 0].sample(frac=2, replace=True).copy()
-        df_1 = train_df.loc[train_df["label"] == 1].sample(frac=1.5, replace=True).copy()
-        df_2 = train_df.loc[train_df["label"] == 2].sample(frac=1.5, replace=True).copy()
-        df_3 = train_df.loc[train_df["label"] == 3].sample(frac=0.8, replace=False).copy()
-        df_4 = train_df.loc[train_df["label"] == 4].sample(frac=1.5, replace=True).copy()
+        target = train_df.label
+        class_sample_count = np.unique(target, return_counts=True)[1]
 
-        train_df = pd.concat([df_0, df_1, df_2, df_4, df_3], axis=0).reset_index(drop=True)
+
+        class_sample_count[0] *= 1
+        class_sample_count[1] *= 1
+        class_sample_count[2] *= 1
+        class_sample_count[3] *= 0.7
+        class_sample_count[4] *= 1
+
+        weight = 1. / class_sample_count
+        samples_weight = weight[target]
+        samples_weight = torch.from_numpy(samples_weight)
+
+        sampler = torch.utils.data.WeightedRandomSampler(samples_weight, len(samples_weight))
 
     print("finish data setting")
     print(train_df.head())
@@ -177,7 +183,7 @@ def main(args):
 
     train_loader = DataLoader(
         train_dataset,
-        # sampler=BalanceClassSampler(labels=train_dataset.get_labels(), mode="upsampling"),
+        sampler=sampler,
         batch_size=config.batch_size,
         pin_memory=True,
         num_workers=4,
@@ -194,7 +200,7 @@ def main(args):
 
     if config.resume_dir is None:
         if "efficientnet" in config.net_type:
-            net = MODEL_LIST["effcientnet"](net_type=config.net_type, pretrained=True)
+            net = MODEL_LIST["effcientnet"](net_type=config.net_type, pretrained=True, bn=config.bn)
         elif "vit" in config.net_type:
             net = MODEL_LIST["vit"](net_type=config.net_type, pretrained=True)
         elif "res" in config.net_type:

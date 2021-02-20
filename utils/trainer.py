@@ -380,8 +380,8 @@ class PyTorchTrainerStudent:
                 self.log(f'\n{timestamp}\nLR: {lr}')
                 wandb.log({"Epoch": self.epoch, "lr": lr }, step=e)
             
-            if self.config.step_scheduler:
-                self.scheduler.step(e)
+            # if self.config.step_scheduler:
+            #     self.scheduler.step(e)
 
 
             t = time.time()
@@ -474,6 +474,8 @@ class PyTorchTrainerStudent:
 
         t = time.time()
         for step, (images, targets) in enumerate(train_loader):
+            if self.config.step_scheduler:
+                self.scheduler.step(self.e + step / self.config.batch_size)
             choice = np.random.rand(1)
             self.optimizer.zero_grad()
             if self.config.verbose:

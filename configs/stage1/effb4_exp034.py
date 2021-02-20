@@ -8,11 +8,9 @@ from utils.randaug import RandAugment
 
 stage2=False
 
-dir="effb4_exp032"
+dir="effb4_exp034"
 net_type =  "tf_efficientnet_b4_ns"
-bn=False
-
-freeze_bn_epoch = -1
+bn=True
 
 resume=False
 resume_dir = None
@@ -20,12 +18,11 @@ resume_dir = None
 amp=True
 
 use_prev_data=False
-down_sampling3=False
-upsampling=False
+upsampling=True
 
 num_workers=4
 batch_size=45
-n_epochs=15
+n_epochs=70
 img_size=(512, 512)
 
 criterion_name = "CrossEntropyLossOneHot"
@@ -61,6 +58,15 @@ scheduler_params = {
 
 
 ####### data processings
+freeze_bn_epoch=30
+
+FREEZE=False
+START_FREEZE=8
+
+FIRST_FREEZE=False
+END_FREEZE=2
+
+
 preprocessing = "rgb"
 cutmix_ratio = 0
 fmix_ratio = 0

@@ -61,9 +61,10 @@ class KaggleDataset(Dataset):
             image = augmented['image']
 
         if not self.ind:
-            return torch.tensor(image, dtype=torch.float), label
+            return image, label
         else:
-            return torch.tensor(image, dtype=torch.float), label, idx
+            return image, label, idx
+            
     def __len__(self):
         return self.df.shape[0]
 

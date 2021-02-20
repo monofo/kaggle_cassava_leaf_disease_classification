@@ -8,11 +8,11 @@ from utils.randaug import RandAugment
 
 stage2=False
 
-dir="effb4_exp032"
+dir="effb4_exp034"
 net_type =  "tf_efficientnet_b4_ns"
-bn=False
+bn=True
 
-freeze_bn_epoch = -1
+freeze_bn_epoch=40
 
 resume=False
 resume_dir = None

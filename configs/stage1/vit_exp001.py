@@ -10,12 +10,15 @@ stage2=False
 
 dir="vit_exp001"
 net_type = "vit_large_patch16_384"
+bn=False
 
 resume=False
 resume_dir = None
 
 amp=True
-use_prev_data=True
+
+use_prev_data=False
+down_sampling3=False
 upsampling=False
 
 num_workers=4
@@ -23,34 +26,38 @@ batch_size=8
 n_epochs=70
 img_size=(384, 384)
 
-
 criterion_name = "CrossEntropyLossOneHot"
 criterion_params = {
+    # "smoothing": 0.2,
 }
-
-# criterion_name = "LabelSmoothing"
-# criterion_params = {
-#     "smoothing": 0.2,
-# }
 
 optimizer_name = "adam"
 optimizer_params = {
-    "lr": 1e-4,
+    "lr": 1e-4/3,
     "weight_decay": 1e-6,
     # "momentum": 0.9,
     # "opt_eps": 1e-8,
     "lookahead": False
 }
 
-
 scheduler_name = "WarmRestart"
 scheduler_params = {
-    "warmup_factor": 0,
+    "warmup_factor": 7,
     "T_max": 10,
     "T_mul": 1,
     "eta_min": 1e-6
 }
 
+# scheduler_name = "CosineAnnealingWarmRestarts"
+# scheduler_params = {
+#     "warmup_factor": 7,
+#     "T_0": n_epochs-1,
+#     "T_multi": 1,
+#     "eta_min": 1e-6
+# }
+
+
+####### data processings
 freeze_bn_epoch=0
 
 FREEZE=False
@@ -59,19 +66,20 @@ START_FREEZE=8
 FIRST_FREEZE=False
 END_FREEZE=2
 
-######## data processings
 preprocessing = "rgb"
-cutmix_ratio = 0.5
+cutmix_ratio = 0
 fmix_ratio = 0
 smix_ratio = 0
 p=0.5
 
 N=2
-M=8
+M=3
 
 train_transforms = A.Compose(
         [
-            A.Resize(height=img_size[0], width=img_size[1]),
+            A.CenterCrop(img_size[0], img_size[1], p=1),
+            # A.RandomResizedCrop(img_size[0], img_size[1], p=1.0),
+            # A.Resize(img_size[0], img_size[1], p=1.0),
             RandAugment(N, M),
             A.OneOf([A.RandomBrightness(limit=0.1, p=1), A.RandomContrast(limit=0.1, p=1)], p=0.5),
             A.OneOf([A.MotionBlur(blur_limit=3), A.MedianBlur(blur_limit=3), A.GaussianBlur(blur_limit=3),], p=0.5,),
@@ -83,18 +91,18 @@ train_transforms = A.Compose(
                 rotate_limit=20,
                 interpolation=cv2.INTER_LINEAR,
                 border_mode=cv2.BORDER_REFLECT_101,
-                p=1,
+                p=.75,
             ),
-            # A.Cutout(num_holes=8, max_h_size=64, max_w_size=64, fill_value=0, p=0.5),
-            A.Normalize(mean=[0.4309, 0.4968, 0.3135], std=[0.2131, 0.2179, 0.1940]),
+            A.Cutout(num_holes=8, max_h_size=64, max_w_size=64, fill_value=0, p=0.5),
+            A.Normalize(),
             ToTensorV2(p=1.0),
         ]
     )
 
 valid_transforms = A.Compose([
-            # A.CenterCrop(img_size[0], img_size[1], p=0.5),
-            A.Resize(img_size[0], img_size[1], p=1.0),
-            A.Normalize(mean=[0.4309, 0.4968, 0.3135], std=[0.2131, 0.2179, 0.1940]),
+            A.CenterCrop(img_size[0], img_size[1], p=1),
+            # A.Resize(img_size[0], img_size[1], p=1.0),
+            A.Normalize(),
             ToTensorV2(p=1.0),
         ], p=1.0)
 

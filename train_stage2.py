@@ -18,20 +18,30 @@ import gc
 
 import wandb
 from dataset import KaggleDataset
-from models.model_factory import MODEL_LIST
+from models.model_factory import MODEL_LIST, CassavaNet
 from losses.loss import CustomeLoss, CrossEntropyLossOneHot
 from torch.cuda.amp import GradScaler, autocast
 import torch.nn.functional as F
 from losses.loss import get_criterion
 from optimizers.optimizer import get_optimizer
 
+from utils.mixs import cutmix, fmix, mix_criterion, snapmix
+
 sys.path.append("configs")
+# chs = [
+#     "result/upload_result/effb4_exp003/effb4_exp032_fold_0_best-checkpoint-012epoch.bin",
+#     "result/upload_result/effb4_exp003/effb4_exp032_fold_1_best-checkpoint-012epoch.bin",
+#     "result/upload_result/effb4_exp003/effb4_exp032_fold_2_best-checkpoint-011epoch.bin",
+#     "result/upload_result/effb4_exp003/effb4_exp032_fold_3_best-checkpoint-010epoch.bin",
+#     "result/upload_result/effb4_exp003/effb4_exp032_fold_4_best-checkpoint-011epoch.bin",
+# ]
+
 chs = [
-    "result/upload_result/effb4_exp003/effb4_exp032_fold_0_best-checkpoint-012epoch.bin",
-    "result/upload_result/effb4_exp003/effb4_exp032_fold_1_best-checkpoint-012epoch.bin",
-    "result/upload_result/effb4_exp003/effb4_exp032_fold_2_best-checkpoint-011epoch.bin",
-    "result/upload_result/effb4_exp003/effb4_exp032_fold_3_best-checkpoint-010epoch.bin",
-    "result/upload_result/effb4_exp003/effb4_exp032_fold_4_best-checkpoint-011epoch.bin",
+    "result/upload_result/effb4_exp032/best_acc_0.pth",
+    "result/upload_result/effb4_exp032/best_acc_1.pth",
+    "result/upload_result/effb4_exp032/best_acc_2.pth",
+    "result/upload_result/effb4_exp032/best_acc_3.pth",
+    "result/upload_result/effb4_exp032/best_acc_4.pth"
 ]
 
 #########################args + config
@@ -189,32 +199,40 @@ def train(epoch, trainloader, t_net, s_net, criterion, optimizer):
 
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         # targets = targets.argmax(1)
+        choice = np.random.rand(1)
         optimizer.zero_grad()
         inputs, targets = inputs.to(device), targets.to(device)
-        with torch.no_grad():
-            _, t_outputs = t_net(inputs)
 
-        if 1:
-            with autocast():
-                
-                _, s_outputs = s_net(inputs)
-                Kd_loss = criterion(s_outputs, t_outputs.detach())
-                cls_loss = CrossEntropyLossOneHot()(s_outputs, targets)
-                
-                loss = Kd_loss + cls_loss
+        if choice < config.cutmix_ratio:
+            aug_images, aug_targets = cutmix(inputs, targets, 1.)
             
-                scaler.scale(loss).backward()
-                scaler.unscale_(optimizer)
-                grad_norm = torch.nn.utils.clip_grad_norm_(s_net.parameters(), 1000)
-                scaler.step(optimizer)
-                scaler.update()
-        else:
-            _, s_outputs = s_net(inputs)
-            Kd_loss = criterion(s_outputs, t_outputs.detach())
 
+        with torch.no_grad():
+            if choice < config.cutmix_ratio:
+                _, t_outputs = t_net(aug_images)
+            else:
+                _, t_outputs = t_net(inputs)
+
+        with autocast():
+            if choice < config.cutmix_ratio:
+                 _, s_outputs = s_net(aug_images)
+                 cls_loss = mix_criterion(s_outputs, aug_targets, CrossEntropyLossOneHot())
+            else:
+                _, s_outputs = s_net(inputs)
+                cls_loss = CrossEntropyLossOneHot()(s_outputs, targets)
+            
+            Kd_loss = criterion(s_outputs, t_outputs.detach())
+        
+            
+            
+            loss = Kd_loss + cls_loss
+        
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
             grad_norm = torch.nn.utils.clip_grad_norm_(s_net.parameters(), 1000)
-            loss.backward()
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
+
            
 
              
@@ -428,19 +446,12 @@ def main():
     print("model setting")
 
 
-    if "efficientnet" in config.net_type:
-        t_net = MODEL_LIST["effcientnet"](net_type=config.net_type, pretrained=True)
-    elif "vit" in config.net_type:
-        t_net = MODEL_LIST["vit"](net_type=config.net_type, pretrained=True)
-    elif "res" in config.net_type:
-        t_net = MODEL_LIST["resnet"](net_type=config.net_type, pretrained=True)
-    elif "hrnet" in config.net_type:
-        t_net = net = MODEL_LIST["hrnet"](net_type=config.net_type, pretrained=True)
+    
 
 
-    if "efficientnet" in config.net_type:
-        s_net = MODEL_LIST["effcientnet"](net_type="tf_efficientnet_b4_ns", pretrained=True, bn=False)
+    s_net = CassavaNet(net_type=config.net_type, pretrained=True, bn=config.bn)
 
+    t_net = MODEL_LIST["effcientnet"](net_type="tf_efficientnet_b4_ns", pretrained=True, bn=False)
     ch = torch.load(chs[args.fold_num])
     t_net.load_state_dict(ch["model_state_dict"], strict=True)
     t_net = t_net.cuda()
@@ -464,18 +475,13 @@ def main():
 
     start_epoch=0
 
-    if 0:
-        print('==> Resuming from checkpoint..')
-        assert os.path.isdir(f'checkpoint/{config.dir}'), 'Error: no checkpoint directory found!'
-        checkpoint = torch.load(f"checkpoint/{config.dir}/best_acc_{args.fold_num}.pth", map_location='cpu')
-        s_net.load_state_dict(checkpoint['model_state_dict'])
-        best_acc = checkpoint['acc']
-        start_epoch = checkpoint['epoch'] + 1
-        torch.set_rng_state(checkpoint['rng_state'])
 
     s_net = s_net.to(device)
     for epoch in range(start_epoch, config.n_epochs):
         print("lr: ", optimizer.param_groups[0]['lr'])
+        if epoch < config.freeze_bn_epoch:
+            print("freeze_batch_norm")
+            s_net.freeze_batchnorm_stats()
         train_loss, train_acc = train(epoch, train_loader, t_net, s_net, criterion, optimizer)
         test_loss, test_acc = test(epoch, valid_loader, t_net, s_net, criterion)
 
